@@ -1,0 +1,201 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+enum Role {
+  OWNER
+  MANAGER
+}
+
+enum LeadStatus {
+  NEW
+  QUOTED
+  WON
+  LOST
+}
+
+enum SiteType {
+  OFFICE
+  RETAIL
+  MEDICAL
+  WAREHOUSE
+  SCHOOL
+  GYM
+  OTHER
+}
+
+enum ClientStatus {
+  ACTIVE
+  PAUSED
+  CANCELLED
+}
+
+enum JobStatus {
+  SCHEDULED
+  COMPLETED
+  MISSED
+}
+
+enum IssueFlag {
+  NONE
+  COMPLAINT
+  ACCESS
+  QUALITY
+  LATE
+}
+
+enum MessageType {
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  users     User[]
+  leads     Lead[]
+  clients   Client[]
+  teams     Team[]
+  settings  Json?    // Store hourly rate, target margin, etc.
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      Role     @default(MANAGER)
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Lead {
+  id                    String      @id @default(cuid())
+  companyId            String
+  company              Company     @relation(fields: [companyId], references: [id])
+  source                String      // web|phone|email|referral
+  contactName           String
+  contactEmail          String
+  contactPhone          String
+  siteType              SiteType
+  address               String
+  city                  String
+  county                String
+  eircode               String?
+  squareMeters         Float
+  frequencyPerWeek     Int
+  requiredStartDate     DateTime
+  notes                 String?
+  status                LeadStatus  @default(NEW)
+  aiLeadScore           Int?        // 0-100
+  aiNotes               String?
+  suggestedQuoteMonthly Float?
+  messages              MessageLog[]
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+}
+
+model Client {
+  id                    String       @id @default(cuid())
+  companyId            String
+  company              Company      @relation(fields: [companyId], references: [id])
+  name                  String
+  address               String
+  city                  String
+  county                String
+  eircode               String?
+  startDate             DateTime
+  status                ClientStatus @default(ACTIVE)
+  contractMonthlyValue  Float
+  contractFrequencyPerWeek Int
+  satisfactionScore     Int?         // 0-100
+  churnRisk             Int?         // 0-100
+  churnRiskReason       String?
+  jobs                  Job[]
+  messages              MessageLog[]
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+}
+
+model Job {
+  id                String       @id @default(cuid())
+  clientId          String
+  client            Client       @relation(fields: [clientId], references: [id])
+  date              DateTime
+  startTime         DateTime
+  durationMinutes   Int
+  teamId            String?
+  team              Team?        @relation(fields: [teamId], references: [id])
+  estimatedCost     Float
+  priceCharged      Float
+  marginEuro        Float
+  marginPct         Float
+  status            JobStatus    @default(SCHEDULED)
+  issueFlag         IssueFlag    @default(NONE)
+  timesheets        Timesheet[]
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+}
+
+model Team {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  name      String
+  staff     Staff[]
+  jobs      Job[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Staff {
+  id          String      @id @default(cuid())
+  teamId      String
+  team        Team        @relation(fields: [teamId], references: [id])
+  name        String
+  hourlyRate  Float
+  skills      Json?
+  active      Boolean     @default(true)
+  timesheets  Timesheet[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model Timesheet {
+  id            String   @id @default(cuid())
+  staffId       String
+  staff         Staff    @relation(fields: [staffId], references: [id])
+  jobId         String
+  job           Job      @relation(fields: [jobId], references: [id])
+  hoursWorked   Float
+  overtimeHours Float    @default(0)
+  notes         String?
+  createdAt     DateTime @default(now())
+}
+
+model MessageLog {
+  id             String      @id @default(cuid())
+  type           MessageType
+  to             String
+  subject        String?
+  body           String
+  status         String
+  leadId         String?
+  lead           Lead?       @relation(fields: [leadId], references: [id])
+  clientId       String?
+  client         Client?     @relation(fields: [clientId], references: [id])
+  createdAt      DateTime    @default(now())
+}
