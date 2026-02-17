@@ -1,106 +1,116 @@
-// Mock Database Implementation for Demo Mode
-// This allows the app to run without a live Postgres connection
+// Mock database layer for demo purposes
+// Define enums manually to avoid @prisma/client dependency issues in this environment
 
-const companies = [
-    { id: "company_1", name: "Droplet Cleaning Services", settings: { defaultHourlyRate: 15.0, targetMarginPct: 35.0 } }
-];
+export type Role = "OWNER" | "MANAGER";
+export type LeadStatus = "NEW" | "QUOTED" | "WON" | "LOST";
+export type SiteType = "OFFICE" | "RETAIL" | "MEDICAL" | "WAREHOUSE" | "SCHOOL" | "GYM" | "OTHER";
+export type ClientStatus = "ACTIVE" | "PAUSED" | "CANCELLED";
+export type JobStatus = "SCHEDULED" | "COMPLETED" | "MISSED";
+export type IssueFlag = "NONE" | "COMPLAINT" | "ACCESS" | "QUALITY" | "LATE";
+export type MessageType = "EMAIL" | "SMS" | "WHATSAPP";
 
-const leads = Array.from({ length: 50 }, (_, i) => ({
+const demoCompany = {
+    id: "comp_1",
+    name: "Droplet Cleaning Services",
+    settings: {
+        defaultHourlyRate: 15.0,
+        targetMarginPct: 35.0,
+    }
+};
+
+const mockLeads = Array.from({ length: 50 }, (_, i) => ({
     id: `lead_${i + 1}`,
     contactName: `Lead Contact ${i + 1}`,
     contactEmail: `lead${i + 1}@example.com`,
-    siteType: ["OFFICE", "RETAIL", "MEDICAL", "WAREHOUSE"][i % 4],
-    squareMeters: 100 + (i * 10),
+    city: ["Dublin", "Cork", "Galway", "Limerick"][i % 4],
+    county: ["Dublin", "Cork", "Galway", "Limerick"][i % 4],
+    status: (["NEW", "QUOTED", "WON", "LOST"][i % 4]) as LeadStatus,
+    siteType: (["OFFICE", "RETAIL", "MEDICAL", "WAREHOUSE"][i % 4]) as SiteType,
+    squareMeters: 100 + i * 10,
     frequencyPerWeek: (i % 5) + 1,
-    city: "Dublin",
-    county: "Dublin",
-    status: ["NEW", "QUOTED", "WON", "LOST"][i % 4],
-    createdAt: new Date(),
-    aiLeadScore: i % 10 === 0 ? 85 : null,
-    suggestedQuoteMonthly: i % 10 === 0 ? 1200 : null,
+    aiLeadScore: 40 + (i % 60),
+    suggestedQuoteMonthly: 500 + i * 50,
+    source: i % 3 === 0 ? "referral" : "web",
+    aiNotes: "Standard lead with steady growth potential.",
+    createdAt: new Date(Date.now() - i * 86400000).toISOString(),
 }));
 
-const clients = Array.from({ length: 20 }, (_, i) => ({
+const mockClients = Array.from({ length: 20 }, (_, i) => ({
     id: `client_${i + 1}`,
     name: `Client Company ${i + 1}`,
-    city: "Dublin",
-    county: "Dublin",
-    startDate: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30 * i),
-    contractMonthlyValue: 1500 + (i * 100),
+    city: ["Dublin", "Cork", "Galway", "Limerick"][i % 4],
+    county: ["Dublin", "Cork", "Galway", "Limerick"][i % 4],
+    contractMonthlyValue: 1200 + i * 100,
     contractFrequencyPerWeek: (i % 5) + 1,
-    churnRisk: i < 3 ? 75 : 15,
+    startDate: new Date(Date.now() - i * 30 * 86400000).toISOString(),
+    churnRisk: i < 3 ? 75 : 10 + (i * 2),
+    churnRiskReason: i < 3 ? "Missed jobs and quality complaints." : "Stable relationship.",
+    satisfactionScore: 70 + (i % 30),
 }));
 
-const teams = [
-    { id: "team_1", name: "Dublin North" },
-    { id: "team_2", name: "Dublin South" },
-    { id: "team_3", name: "Midlands" },
-];
-
-const jobs = Array.from({ length: 30 }, (_, i) => ({
+const mockJobs = Array.from({ length: 50 }, (_, i) => ({
     id: `job_${i + 1}`,
     clientId: `client_${(i % 20) + 1}`,
-    client: clients[i % 20],
-    date: new Date(Date.now() + 1000 * 60 * 60 * 24 * (i - 15)),
-    startTime: new Date(Date.now() + 1000 * 60 * 60 * 24 * (i - 15)),
-    durationMinutes: 120,
-    teamId: `team_${(i % 3) + 1}`,
-    team: teams[i % 3],
-    priceCharged: 250,
-    marginEuro: 75,
-    marginPct: 30,
-    status: i < 15 ? 'COMPLETED' : 'SCHEDULED',
-}));
-
-const timesheets = jobs.filter(j => j.status === 'COMPLETED').map(j => ({
-    id: `ts_${j.id}`,
-    jobId: j.id,
-    hoursWorked: 4,
-    overtimeHours: Math.random() > 0.8 ? 1 : 0,
+    client: mockClients[i % 20],
+    date: new Date(Date.now() + (i - 10) * 86400000).toISOString(),
+    startTime: new Date(Date.now() + (i - 10) * 86400000).toISOString(),
+    durationMinutes: 120 + (i % 240),
+    priceCharged: 400 + i * 10,
+    marginPct: 15 + (i % 40),
+    status: (i < 10 ? "COMPLETED" : "SCHEDULED") as JobStatus,
+    issueFlag: (i === 1 ? "QUALITY" : "NONE") as IssueFlag,
 }));
 
 export const db = {
     company: {
-        findUnique: async () => companies[0],
-    },
-    user: {
-        count: async () => 1,
+        findFirst: async () => demoCompany,
     },
     lead: {
-        count: async (args: any) => leads.filter(l => args?.where?.status ? l.status === args.where.status : true).length,
-        findMany: async () => leads,
-        findUnique: async ({ where }: any) => leads.find(l => l.id === where.id),
+        findMany: async ({ where, take }: any = {}) => {
+            let filtered = [...mockLeads];
+            if (where?.status) filtered = filtered.filter(l => l.status === where.status);
+            return take ? filtered.slice(0, take) : filtered;
+        },
+        findUnique: async ({ where }: any) => mockLeads.find(l => l.id === where.id),
+        count: async ({ where }: any = {}) => where?.status ? mockLeads.filter(l => l.status === where.status).length : mockLeads.length,
         update: async ({ where, data }: any) => {
-            const idx = leads.findIndex(l => l.id === where.id);
-            if (idx > -1) leads[idx] = { ...leads[idx], ...data };
-            return leads[idx];
+            const lead = mockLeads.find(l => l.id === where.id);
+            return { ...lead, ...data };
         }
     },
     client: {
-        findMany: async () => clients,
+        findMany: async ({ where, take, orderBy }: any = {}) => {
+            let filtered = [...mockClients];
+            if (where?.churnRisk?.gte) filtered = filtered.filter(c => c.churnRisk >= where.churnRisk.gte);
+            if (orderBy?.churnRisk === 'desc') filtered.sort((a, b) => b.churnRisk - a.churnRisk);
+            return take ? filtered.slice(0, take) : filtered;
+        },
         findUnique: async ({ where }: any) => {
-            const client = clients.find(c => c.id === where.id);
-            if (client) return { ...client, jobs: jobs.filter(j => j.clientId === client.id) };
-            return null;
+            const client = mockClients.find(c => c.id === where.id);
+            if (!client) return null;
+            return {
+                ...client,
+                jobs: mockJobs.filter(j => j.clientId === client.id)
+            };
         },
         update: async ({ where, data }: any) => {
-            const idx = clients.findIndex(c => c.id === where.id);
-            if (idx > -1) clients[idx] = { ...clients[idx], ...data };
-            return clients[idx];
+            const client = mockClients.find(c => c.id === where.id);
+            return { ...client, ...data };
         }
     },
     job: {
-        findMany: async (args: any) => {
-            let res = jobs;
-            if (args?.where?.status) res = res.filter(j => j.status === args.where.status);
-            if (args?.where?.marginPct?.lt) res = res.filter(j => j.marginPct < args.where.marginPct.lt);
-            return res;
-        },
+        findMany: async ({ where, take, orderBy }: any = {}) => {
+            let filtered = [...mockJobs];
+            if (where?.status) filtered = filtered.filter(j => j.status === where.status);
+            if (where?.marginPct?.lt) filtered = filtered.filter(j => j.marginPct < where.marginPct.lt);
+            if (orderBy?.marginPct === 'asc') filtered.sort((a, b) => a.marginPct - b.marginPct);
+            return take ? filtered.slice(0, take) : filtered;
+        }
     },
     team: {
-        findMany: async () => teams,
+        findMany: async () => [{ id: "team1", name: "Dublin North" }, { id: "team2", name: "Dublin South" }],
     },
     timesheet: {
-        findMany: async () => timesheets,
+        findMany: async () => [{ id: "ts1", hoursWorked: 40, overtimeHours: 5 }],
     }
 };
